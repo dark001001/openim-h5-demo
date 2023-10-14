@@ -1,0 +1,169 @@
+<template>
+  <div ref="messageContainerRef" class="message_item" :class="{ message_item_self: isSelfMsg }">
+    <div class="message_container_wrap">
+      <Avatar ref="avatarRef" :size="42" :src="source.senderFaceUrl" :desc="source.senderNickname" @click="toDetails" />
+      <div class="message_container">
+        <div class="max-w-[240px] text-xs text-[#666] mb-1 truncate">{{ source.senderNickname }}</div>
+        <MessageMenu :message="source" :disabled="showCheck || isActive">
+          <component :message="source" :is-self-msg="isSelfMsg" :disabled="showCheck || isActive" :is="getRenderComp"></component>
+        </MessageMenu>
+        <MessageReadState v-if="isSelfMsg" :message="source" />
+      </div>
+      <div style="margin: 30px 10px 0 10px" v-show="source.status === 3"><van-icon name="warning" color="#f00" /></div>
+    </div>
+  </div>
+</template>
+
+<script setup lang="ts">
+import Avatar from "@/components/Avatar/index.vue";
+import TextMessageRenderer from "./TextMessageRenderer.vue";
+import MediaMessageRenderer from "./MediaMessageRenderer.vue";
+import CatchMsgRenderer from "./CatchMsgRenderer.vue";
+import MessageReadState from "./MessageReadState.vue";
+import { AllowType, MessageType } from "open-im-sdk-wasm/lib/types/enum";
+import useUserStore from "@/store/modules/user";
+import { ExedMessageItem } from "./data";
+import { useMessageIsRead } from "./useMessageIsRead";
+import MessageMenu from "../MessageMenu.vue";
+import useContactStore from "@/store/modules/contact";
+import useConversationStore from "@/store/modules/conversation";
+
+interface MessageItemProps {
+  source: ExedMessageItem;
+  showCheck?: boolean;
+  isPreView?: boolean;
+  isActive?: boolean;
+}
+
+const userStore = useUserStore();
+const contactStore = useContactStore();
+const conversationStore = useConversationStore();
+const props = defineProps<MessageItemProps>();
+
+const { source, showCheck } = toRefs(props);
+const messageContainerRef = ref();
+const avatarRef = ref();
+
+const isSelfMsg = computed(() => userStore.selfInfo.userID === source.value.sendID);
+const getRenderComp = computed(() => {
+  switch (props.source.contentType) {
+    case MessageType.TextMessage:
+      return TextMessageRenderer;
+    case MessageType.VideoMessage:
+    case MessageType.PictureMessage:
+      return MediaMessageRenderer;
+    default:
+      return CatchMsgRenderer;
+  }
+});
+
+useMessageIsRead({
+  messageContainerRef,
+  isSelfMsg,
+  isRead: props.source.isRead,
+  isPreView: props.isPreView!,
+  clientMsgID: props.source.clientMsgID,
+});
+const toDetails = async () => {
+  if (props.showCheck) {
+    return;
+  }
+  if (props.source.groupID && conversationStore.storeCurrentGroupInfo.lookMemberInfo === AllowType.NotAllowed) {
+    return;
+  }
+  contactStore.getUserCardData(props.source.sendID, props.source.groupID);
+};
+</script>
+
+<style lang="scss" scoped>
+.message_item {
+  display: flex;
+  align-items: center;
+  padding: 12px 22px;
+  color: #333;
+  min-height: 40px;
+  position: relative;
+  -webkit-overflow-scrolling: touch;
+
+  .check_wrap {
+    min-width: 20px;
+    margin-top: 10px;
+    margin-right: 12px;
+  }
+
+  .need_bg {
+    padding: 8px 12px;
+    border-radius: 4px;
+    background-color: #f0f0f0;
+  }
+
+  .message_container_wrap {
+    display: flex;
+  }
+
+  .message_container {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    margin-left: 12px;
+    max-width: 80%;
+    position: relative;
+
+    .message_content_wrap {
+      position: relative;
+    }
+
+    .time_line {
+      font-size: 12px;
+      color: #999;
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      transform: translate(-50%, 100%);
+    }
+  }
+
+  &_self {
+    flex-direction: row-reverse;
+
+    .check_wrap {
+      margin-right: 0;
+      margin-left: 12px;
+    }
+
+    .need_bg {
+      background-color: #dcebfe;
+    }
+
+    .message_container_wrap {
+      flex-direction: row-reverse;
+    }
+
+    .message_container {
+      margin-left: 0;
+      margin-right: 12px;
+      align-items: flex-end;
+    }
+  }
+
+  &_checked {
+    align-items: flex-start;
+    padding: 12px;
+  }
+
+  &_active {
+    background-color: rgba(32, 107, 237, 0.2);
+    animation: fadeOut 3s forwards;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    background-color: rgba(32, 107, 237, 0.2);
+  }
+
+  to {
+    background-color: transparent;
+  }
+}
+</style>
